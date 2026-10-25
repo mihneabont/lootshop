@@ -1,69 +1,102 @@
-import Image from "next/image";
+import Link from 'next/link';
 
-export default function Home() {
+import { Countdown } from '@/components/countdown';
+import { GiveawayCard, PhaseBadge, Prices, ProductImage } from '@/components/giveaway-card';
+import { PushToggle } from '@/components/push-toggle';
+import { buttonStyles, Card, Empty } from '@/components/ui';
+import { getSession } from '@/lib/auth';
+import { phaseOf } from '@/lib/format';
+import type { Giveaway } from '@/lib/types';
+
+export default async function Home() {
+  const { supabase, user } = await getSession();
+  const { data } = await supabase
+    .from('giveaways')
+    .select('*')
+    .neq('status', 'draft')
+    .order('opens_at', { ascending: false })
+    .limit(60);
+  const giveaways = (data ?? []) as Giveaway[];
+
+  const live = giveaways.filter((g) => phaseOf(g) === 'open');
+  const upcoming = giveaways.filter((g) => phaseOf(g) === 'upcoming').reverse();
+  const past = giveaways.filter((g) => ['closed', 'drawn'].includes(phaseOf(g)));
+  const featured = live[0];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <>
+      {featured ? (
+        <Card className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
+          <ProductImage giveaway={featured} />
+          <div className="flex flex-col justify-center gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <PhaseBadge giveaway={featured} />
+              <span className="text-sm font-semibold text-muted">
+                <Countdown to={featured.closes_at} prefix="Se închide în " />
+              </span>
+            </div>
+            <h1 className="text-3xl font-black leading-tight tracking-tight">{featured.title}</h1>
+            <Prices giveaway={featured} size="lg" />
+            <p className="text-muted">
+              Înscriere gratuită. Câștigătorul poate cumpăra produsul la acest preț de pe lootshop.ro.
+            </p>
+            <Link href={`/giveaway/${featured.id}`} className={buttonStyles.primary}>
+              {user ? 'Vezi și înscrie-te' : 'Înscrie-te gratuit'}
+            </Link>
+            <p className="text-sm text-muted">{featured.entry_count} înscriși până acum</p>
+          </div>
+        </Card>
+      ) : (
+        <Card className="flex flex-col gap-2 p-6">
+          <h1 className="text-3xl font-black tracking-tight">Giveaway zilnic Loot Shop</h1>
+          <p className="text-muted">
+            În fiecare zi, un produs sigilat la un preț imposibil. Înscrierea e gratuită; câștigătorul îl cumpără de pe
+            lootshop.ro la prețul din giveaway.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        </Card>
+      )}
+
+      {user ? <PushToggle compact /> : null}
+
+      {live.length > 1 ? (
+        <Section title="Live acum">
+          {live.slice(1).map((g) => (
+            <GiveawayCard key={g.id} giveaway={g} />
+          ))}
+        </Section>
+      ) : null}
+
+      {upcoming.length ? (
+        <Section title="Urmează">
+          {upcoming.map((g) => (
+            <GiveawayCard key={g.id} giveaway={g} />
+          ))}
+        </Section>
+      ) : null}
+
+      <Section title="Giveaway-uri trecute">
+        {past.length ? (
+          past.map((g) => <GiveawayCard key={g.id} giveaway={g} />)
+        ) : (
+          <div className="col-span-full">
+            <Empty title="Încă nu există giveaway-uri încheiate" body="Primul câștigător apare aici." />
+          </div>
+        )}
+      </Section>
+
+      <p className="text-center text-xs text-muted">
+        Participarea este gratuită. Vezi <Link href="/rules" className="underline">regulamentul oficial</Link> și{' '}
+        <Link href="/privacy" className="underline">politica de confidențialitate</Link>.
+      </p>
+    </>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-xl font-extrabold tracking-tight">{title}</h2>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">{children}</div>
+    </section>
   );
 }

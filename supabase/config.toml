@@ -1,0 +1,19 @@
+# Local settings for the Supabase CLI (`supabase start`, `supabase db push`).
+project_id = "lootshop"
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+
+[auth.email]
+enable_confirmations = true
+
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_SECRET)"
+
+[auth.external.facebook]
+enabled = true
+client_id = "env(FACEBOOK_APP_ID)"
+secret = "env(FACEBOOK_SECRET)"
