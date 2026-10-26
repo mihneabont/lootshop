@@ -9,6 +9,9 @@ import { supabase } from '@/lib/supabase';
 
 type Mode = 'signin' | 'signup' | 'magic';
 
+// Social logins shown on the page; turn each on in Supabase first.
+const providers = (process.env.NEXT_PUBLIC_AUTH_PROVIDERS ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+
 export function LoginForm({ next, initialError }: { next: string; initialError: string | null }) {
   const [mode, setMode] = useState<Mode>('signin');
   const [busy, setBusy] = useState(false);
@@ -66,20 +69,28 @@ export function LoginForm({ next, initialError }: { next: string; initialError: 
 
   return (
     <Card className="flex flex-col gap-4 p-5">
-      <div className="grid gap-2">
-        <Button variant="secondary" onClick={() => oauth('google')} disabled={busy}>
-          <GoogleIcon /> Continuă cu Google
-        </Button>
-        <Button variant="secondary" onClick={() => oauth('facebook')} disabled={busy}>
-          <FacebookIcon /> Continuă cu Facebook
-        </Button>
-      </div>
+      {providers.length ? (
+        <>
+          <div className="grid gap-2">
+            {providers.includes('google') ? (
+              <Button variant="secondary" onClick={() => oauth('google')} disabled={busy}>
+                <GoogleIcon /> Continuă cu Google
+              </Button>
+            ) : null}
+            {providers.includes('facebook') ? (
+              <Button variant="secondary" onClick={() => oauth('facebook')} disabled={busy}>
+                <FacebookIcon /> Continuă cu Facebook
+              </Button>
+            ) : null}
+          </div>
 
-      <div className="flex items-center gap-3 text-xs font-semibold uppercase text-muted">
-        <span className="h-px flex-1 bg-border" />
-        sau cu email
-        <span className="h-px flex-1 bg-border" />
-      </div>
+          <div className="flex items-center gap-3 text-xs font-semibold uppercase text-muted">
+            <span className="h-px flex-1 bg-border" />
+            sau cu email
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
 
       <div className="grid grid-cols-2 rounded-xl bg-background p-1 text-sm font-semibold">
         {(['signin', 'signup'] as const).map((m) => (
