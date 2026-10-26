@@ -1,26 +1,41 @@
+'use client';
+
 import Link from 'next/link';
 
 import { Countdown } from '@/components/countdown';
 import { GiveawayCard, PhaseBadge, Prices, ProductImage } from '@/components/giveaway-card';
+import { NotConfigured } from '@/components/guards';
 import { PushToggle } from '@/components/push-toggle';
-import { buttonStyles, Card, Empty } from '@/components/ui';
-import { getSession } from '@/lib/auth';
+import { buttonStyles, Card, Empty, Loading } from '@/components/ui';
+import { useAuth } from '@/lib/auth-context';
+import { must, useData } from '@/lib/data';
 import { phaseOf } from '@/lib/format';
+import { isConfigured, supabase } from '@/lib/supabase';
 import type { Giveaway } from '@/lib/types';
 
-export default async function Home() {
-  const { supabase, user } = await getSession();
-  const { data } = await supabase
-    .from('giveaways')
-    .select('*')
-    .neq('status', 'draft')
-    .order('opens_at', { ascending: false })
-    .limit(60);
-  const giveaways = (data ?? []) as Giveaway[];
+export default function Home() {
+  return isConfigured ? <HomeContent /> : <NotConfigured />;
+}
 
-  const live = giveaways.filter((g) => phaseOf(g) === 'open');
-  const upcoming = giveaways.filter((g) => phaseOf(g) === 'upcoming').reverse();
-  const past = giveaways.filter((g) => ['closed', 'drawn'].includes(phaseOf(g)));
+function HomeContent() {
+  const { session } = useAuth();
+  const { data, loading } = useData(
+    async () =>
+      must(
+        await supabase()
+          .from('giveaways')
+          .select('*')
+          .neq('status', 'draft')
+          .order('opens_at', { ascending: false })
+          .limit(60),
+      ) as Giveaway[],
+    [],
+  );
+  if (loading || !data) return <Loading />;
+
+  const live = data.filter((g) => phaseOf(g) === 'open');
+  const upcoming = data.filter((g) => phaseOf(g) === 'upcoming').reverse();
+  const past = data.filter((g) => ['closed', 'drawn'].includes(phaseOf(g)));
   const featured = live[0];
 
   return (
@@ -40,8 +55,8 @@ export default async function Home() {
             <p className="text-muted">
               Înscriere gratuită. Câștigătorul poate cumpăra produsul la acest preț de pe lootshop.ro.
             </p>
-            <Link href={`/giveaway/${featured.id}`} className={buttonStyles.primary}>
-              {user ? 'Vezi și înscrie-te' : 'Înscrie-te gratuit'}
+            <Link href={`/giveaway?id=${featured.id}`} className={buttonStyles.primary}>
+              {session ? 'Vezi și înscrie-te' : 'Înscrie-te gratuit'}
             </Link>
             <p className="text-sm text-muted">{featured.entry_count} înscriși până acum</p>
           </div>
@@ -56,7 +71,7 @@ export default async function Home() {
         </Card>
       )}
 
-      {user ? <PushToggle compact /> : null}
+      {session ? <PushToggle compact /> : null}
 
       {live.length > 1 ? (
         <Section title="Live acum">
@@ -85,8 +100,15 @@ export default async function Home() {
       </Section>
 
       <p className="text-center text-xs text-muted">
-        Participarea este gratuită. Vezi <Link href="/rules" className="underline">regulamentul oficial</Link> și{' '}
-        <Link href="/privacy" className="underline">politica de confidențialitate</Link>.
+        Participarea este gratuită. Vezi{' '}
+        <Link href="/rules" className="underline">
+          regulamentul oficial
+        </Link>{' '}
+        și{' '}
+        <Link href="/privacy" className="underline">
+          politica de confidențialitate
+        </Link>
+        .
       </p>
     </>
   );

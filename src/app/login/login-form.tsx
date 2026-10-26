@@ -1,27 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button, Card, cx, Field, Notice } from '@/components/ui';
-import { createClient } from '@/lib/supabase/client';
+import { siteUrl } from '@/lib/paths';
+import { supabase } from '@/lib/supabase';
 
 type Mode = 'signin' | 'signup' | 'magic';
 
 export function LoginForm({ next, initialError }: { next: string; initialError: string | null }) {
-  const router = useRouter();
   const [mode, setMode] = useState<Mode>('signin');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(initialError ? 'Autentificarea a eșuat. Încearcă din nou.' : null);
+  const [error, setError] = useState<string | null>(initialError);
   const [info, setInfo] = useState<string | null>(null);
 
-  const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+  const callbackUrl = () => `${siteUrl()}/login/?next=${encodeURIComponent(next)}`;
 
   const oauth = async (provider: 'google' | 'facebook') => {
     setBusy(true);
     setError(null);
-    const { error } = await createClient().auth.signInWithOAuth({ provider, options: { redirectTo: callbackUrl() } });
+    const { error } = await supabase().auth.signInWithOAuth({ provider, options: { redirectTo: callbackUrl() } });
     if (error) {
       setError(error.message);
       setBusy(false);
@@ -32,35 +31,30 @@ export function LoginForm({ next, initialError }: { next: string; initialError: 
     setBusy(true);
     setError(null);
     setInfo(null);
-    const supabase = createClient();
+    const auth = supabase().auth;
     const email = String(form.get('email') ?? '').trim();
     const password = String(form.get('password') ?? '');
 
     try {
       if (mode === 'signin') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await auth.signInWithPassword({ email, password });
         if (error) throw new Error('Email sau parolă greșită.');
-        router.replace(next);
-        router.refresh();
-        return;
+        return; // The login page redirects once the session appears.
       }
       if (mode === 'signup') {
         if (!form.get('terms')) throw new Error('Trebuie să accepți regulamentul și politica de confidențialitate.');
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await auth.signUp({
           email,
           password,
           options: { emailRedirectTo: callbackUrl(), data: { full_name: String(form.get('name') ?? '').trim() } },
         });
         if (error) throw error;
-        if (data.session) {
-          router.replace(next);
-          router.refresh();
-        } else {
+        if (!data.session) {
           setInfo('Ți-am trimis un email de confirmare. Apasă pe link ca să-ți activezi contul.');
         }
         return;
       }
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: callbackUrl() } });
+      const { error } = await auth.signInWithOtp({ email, options: { emailRedirectTo: callbackUrl() } });
       if (error) throw error;
       setInfo('Ți-am trimis un link de autentificare pe email.');
     } catch (e) {

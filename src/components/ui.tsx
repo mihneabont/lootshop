@@ -69,6 +69,15 @@ export function Field({
   );
 }
 
+export function Check({ label, ...props }: ComponentProps<'input'> & { label: ReactNode }) {
+  return (
+    <label className="flex items-start gap-2 text-sm">
+      <input type="checkbox" {...props} className="mt-0.5 size-4 accent-[var(--primary)]" />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 export function TextArea({ label, className, ...props }: ComponentProps<'textarea'> & { label: string }) {
   return (
     <label className="flex flex-col gap-1.5">
@@ -92,6 +101,14 @@ export function Empty({ title, body }: { title: string; body?: string }) {
     <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border px-6 py-12 text-center">
       <p className="text-lg font-bold">{title}</p>
       {body ? <p className="max-w-sm text-muted">{body}</p> : null}
+    </div>
+  );
+}
+
+export function Loading() {
+  return (
+    <div className="flex flex-1 items-center justify-center py-16">
+      <span className="size-8 animate-spin rounded-full border-4 border-border border-t-primary" aria-label="Se încarcă" />
     </div>
   );
 }

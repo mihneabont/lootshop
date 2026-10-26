@@ -1,59 +1,54 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { Button, cx } from '@/components/ui';
+import { Button, cx, Loading } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
-import { createClient } from '@/lib/supabase/client';
+import { callFunction, supabase } from '@/lib/supabase';
 import type { Message } from '@/lib/types';
 
-// One conversation between the shop and a user. `asAdmin` flips which side is
-// "me"; `send` is the server action that stores and delivers a message.
-export function Conversation({
-  userId,
-  asAdmin,
-  initial,
-  send,
-}: {
-  userId: string;
-  asAdmin: boolean;
-  initial: Message[];
-  send: (body: string, alsoEmail: boolean) => Promise<{ ok: boolean; error?: string }>;
-}) {
-  const router = useRouter();
-  // Messages that arrived live since the page was rendered.
-  const [live, setLive] = useState<Message[]>([]);
+// One conversation between the shop and a user. As admin, messages go through
+// the send-message function (push + optional email); users write directly.
+export function Conversation({ userId, asAdmin, giveawayId }: { userId: string; asAdmin: boolean; giveawayId?: string }) {
+  const [messages, setMessages] = useState<Message[] | null>(null);
   const [draft, setDraft] = useState('');
   const [alsoEmail, setAlsoEmail] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
-  const messages = useMemo(() => {
-    const seen = new Set(initial.map((m) => m.id));
-    return [...initial, ...live.filter((m) => !seen.has(m.id))];
-  }, [initial, live]);
-  useEffect(() => bottom.current?.scrollIntoView({ block: 'end' }), [messages.length]);
+  const load = useCallback(async () => {
+    const client = supabase();
+    const { data } = await client
+      .from('messages')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(300);
+    setMessages((data ?? []) as Message[]);
+    // Mark the other side's messages as read.
+    await client
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('from_admin', !asAdmin)
+      .is('read_at', null);
+  }, [userId, asAdmin]);
 
-  // New messages appear live.
   useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
+    const client = supabase();
+    const first = setTimeout(load, 0);
+    const channel = client
       .channel(`messages:${userId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` },
-        (payload) => {
-          const m = payload.new as Message;
-          setLive((prev) => (prev.some((p) => p.id === m.id) ? prev : [...prev, m]));
-        },
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${userId}` }, load)
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      clearTimeout(first);
+      client.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, load]);
+
+  useEffect(() => bottom.current?.scrollIntoView({ block: 'nearest' }), [messages?.length]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,12 +56,23 @@ export function Conversation({
     if (!body) return;
     setBusy(true);
     setError(null);
-    const res = await send(body, alsoEmail);
-    setBusy(false);
-    if (!res.ok) return setError(res.error ?? 'Mesajul nu a fost trimis.');
-    setDraft('');
-    router.refresh();
+    try {
+      if (asAdmin) {
+        await callFunction('send-message', { user_id: userId, body, giveaway_id: giveawayId ?? null, also_email: alsoEmail });
+      } else {
+        const { error: insertError } = await supabase().from('messages').insert({ user_id: userId, from_admin: false, body });
+        if (insertError) throw insertError;
+      }
+      setDraft('');
+      await load();
+    } catch (err) {
+      setError((err as Error).message || 'Mesajul nu a fost trimis.');
+    } finally {
+      setBusy(false);
+    }
   };
+
+  if (!messages) return <Loading />;
 
   return (
     <div className="flex flex-col gap-3">

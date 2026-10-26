@@ -48,7 +48,7 @@ export function Prices({ giveaway, size = 'md' }: { giveaway: Giveaway; size?: '
 export function GiveawayCard({ giveaway, href }: { giveaway: Giveaway; href?: string }) {
   const phase = phaseOf(giveaway);
   return (
-    <Link href={href ?? `/giveaway/${giveaway.id}`} className="group block">
+    <Link href={href ?? `/giveaway?id=${giveaway.id}`} className="group block">
       <Card className="flex h-full flex-col gap-3 transition group-hover:border-primary/50">
         <ProductImage giveaway={giveaway} />
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted">

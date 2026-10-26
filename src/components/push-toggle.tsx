@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 
-import { removeSubscription, saveSubscription } from '@/app/push-actions';
 import { Button, cx } from '@/components/ui';
+import { useAuth } from '@/lib/auth-context';
+import { withBase } from '@/lib/paths';
+import { supabase } from '@/lib/supabase';
 
 function urlBase64ToUint8Array(base64: string) {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4);
@@ -14,6 +16,7 @@ function urlBase64ToUint8Array(base64: string) {
 type State = 'loading' | 'unsupported' | 'ios-install' | 'denied' | 'off' | 'on';
 
 export function PushToggle({ compact = false }: { compact?: boolean }) {
+  const { session } = useAuth();
   const [state, setState] = useState<State>('loading');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +33,7 @@ export function PushToggle({ compact = false }: { compact?: boolean }) {
         return;
       }
       if (Notification.permission === 'denied') return setState('denied');
-      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
+      const reg = await navigator.serviceWorker.register(withBase('/sw.js'), { scope: withBase('/'), updateViaCache: 'none' });
       const sub = await reg.pushManager.getSubscription();
       setState(sub ? 'on' : 'off');
     })().catch(() => setState('unsupported'));
@@ -50,8 +53,19 @@ export function PushToggle({ compact = false }: { compact?: boolean }) {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
       });
-      const res = await saveSubscription(JSON.parse(JSON.stringify(sub)), navigator.userAgent);
-      if (!res.ok) throw new Error(res.error);
+      const json = sub.toJSON();
+      const userId = session?.user.id;
+      if (!userId) throw new Error('Trebuie să fii autentificat.');
+      const { error } = await supabase().from('push_subscriptions').upsert({
+        endpoint: sub.endpoint,
+        user_id: userId,
+        p256dh: json.keys!.p256dh,
+        auth: json.keys!.auth,
+        user_agent: navigator.userAgent.slice(0, 300),
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      await supabase().from('profiles').update({ notifications_opt_in: true }).eq('id', userId);
       setState('on');
     } catch (e) {
       setError((e as Error).message);
@@ -66,7 +80,7 @@ export function PushToggle({ compact = false }: { compact?: boolean }) {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
-        await removeSubscription(sub.endpoint);
+        await supabase().from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
         await sub.unsubscribe();
       }
       setState('off');

@@ -1,0 +1,55 @@
+# Builds the static site and publishes it to GitHub Pages on every push to main.
+name: Deploy site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - id: pages
+        uses: actions/configure-pages@v5
+      - run: npm ci
+      - run: npm run build
+        env:
+          # The repo sub-path, e.g. /lootshop (empty with a custom domain).
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          # Public values: set them under Settings → Secrets and variables → Actions → Variables.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
+          NEXT_PUBLIC_COMPANY_NAME: ${{ vars.COMPANY_NAME }}
+          NEXT_PUBLIC_COMPANY_CUI: ${{ vars.COMPANY_CUI }}
+          NEXT_PUBLIC_COMPANY_REG: ${{ vars.COMPANY_REG }}
+          NEXT_PUBLIC_COMPANY_ADDRESS: ${{ vars.COMPANY_ADDRESS }}
+          NEXT_PUBLIC_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

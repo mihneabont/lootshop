@@ -1,35 +1,29 @@
-import 'server-only';
+import webpush from 'npm:web-push@3.6.7';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
-import webpush from 'web-push';
-
-import { createAdminClient } from '@/lib/supabase/admin';
+export type PushPayload = { title: string; body: string; url?: string };
+type Row = { endpoint: string; p256dh: string; auth: string };
 
 let configured = false;
 function configure() {
   if (configured) return true;
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const publicKey = Deno.env.get('VAPID_PUBLIC_KEY');
+  const privateKey = Deno.env.get('VAPID_PRIVATE_KEY');
   if (!publicKey || !privateKey) {
     console.warn('VAPID keys not set; skipping push');
     return false;
   }
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT ?? 'mailto:contact@lootshop.ro', publicKey, privateKey);
+  webpush.setVapidDetails(Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contact@lootshop.ro', publicKey, privateKey);
   configured = true;
   return true;
 }
 
-export type PushPayload = { title: string; body: string; url?: string };
-
-type Row = { endpoint: string; p256dh: string; auth: string };
-
-async function sendToRows(rows: Row[], payload: PushPayload) {
+// Sends to each subscription and removes the ones the browser says are gone.
+async function sendToRows(db: SupabaseClient, rows: Row[], payload: PushPayload) {
   if (!configure() || rows.length === 0) return 0;
-  const db = createAdminClient();
   const body = JSON.stringify(payload);
-  let sent = 0;
   const expired: string[] = [];
-
-  // Small batches keep a big audience from opening thousands of connections at once.
+  let sent = 0;
   for (let i = 0; i < rows.length; i += 50) {
     await Promise.all(
       rows.slice(i, i + 50).map(async (r) => {
@@ -46,24 +40,20 @@ async function sendToRows(rows: Row[], payload: PushPayload) {
       }),
     );
   }
-
   if (expired.length) await db.from('push_subscriptions').delete().in('endpoint', expired);
   return sent;
 }
 
-export async function pushToUser(userId: string, payload: PushPayload) {
-  const { data } = await createAdminClient()
-    .from('push_subscriptions')
-    .select('endpoint, p256dh, auth')
-    .eq('user_id', userId);
-  return sendToRows(data ?? [], payload);
+export async function pushToUser(db: SupabaseClient, userId: string, payload: PushPayload) {
+  const { data } = await db.from('push_subscriptions').select('endpoint, p256dh, auth').eq('user_id', userId);
+  return sendToRows(db, data ?? [], payload);
 }
 
-export async function pushToEveryone(payload: PushPayload) {
-  const { data, error } = await createAdminClient()
+export async function pushToEveryone(db: SupabaseClient, payload: PushPayload) {
+  const { data, error } = await db
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth, profiles!inner(notifications_opt_in)')
     .eq('profiles.notifications_opt_in', true);
   if (error) throw error;
-  return sendToRows(data ?? [], payload);
+  return sendToRows(db, data ?? [], payload);
 }

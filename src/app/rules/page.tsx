@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 import { PageTitle } from '@/components/ui';
 import { company } from '@/lib/company';
@@ -67,8 +68,8 @@ export default function RulesPage() {
 
       <h2>9. Date personale</h2>
       <p>
-        Datele participanților sunt prelucrate conform <a href="/privacy" className="underline">politicii de
-        confidențialitate</a> și Regulamentului (UE) 2016/679.
+        Datele participanților sunt prelucrate conform <Link href="/privacy" className="underline">politicii de
+        confidențialitate</Link> și Regulamentului (UE) 2016/679.
       </p>
 
       <h2>10. Litigii și contact</h2>

@@ -1,23 +1,20 @@
-import 'server-only';
-
-// Creates a single-use WooCommerce coupon for the winner, restricted to the
-// giveaway product and the winner's email. Returns null when the shop's REST
-// API keys or the product id are missing, so the admin can add a code by hand.
+// Creates a single-use WooCommerce coupon for the winner, if the shop's REST
+// API keys are configured. Returns null when WooCommerce is not set up.
 export async function createWinnerCoupon(opts: {
   productId: number | null;
   discountRon: number;
   email: string | null;
 }): Promise<string | null> {
-  const site = process.env.WC_SITE_URL;
-  const key = process.env.WC_CONSUMER_KEY;
-  const secret = process.env.WC_CONSUMER_SECRET;
+  const site = Deno.env.get('WC_SITE_URL');
+  const key = Deno.env.get('WC_CONSUMER_KEY');
+  const secret = Deno.env.get('WC_CONSUMER_SECRET');
   if (!site || !key || !secret || !opts.productId) return null;
 
   const code = `LOOT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   const res = await fetch(`${site.replace(/\/$/, '')}/wp-json/wc/v3/coupons`, {
     method: 'POST',
     headers: {
-      Authorization: `Basic ${Buffer.from(`${key}:${secret}`).toString('base64')}`,
+      Authorization: `Basic ${btoa(`${key}:${secret}`)}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -30,7 +27,7 @@ export async function createWinnerCoupon(opts: {
       usage_limit_per_user: 1,
       limit_usage_to_x_items: 1,
       email_restrictions: opts.email ? [opts.email] : [],
-      description: 'Câștigător giveaway Loot Shop',
+      description: 'Loot Shop giveaway winner',
     }),
   });
   if (!res.ok) {

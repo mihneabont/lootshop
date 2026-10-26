@@ -1,30 +1,42 @@
-import type { Metadata } from 'next';
+'use client';
+
 import Link from 'next/link';
 
 import { PhaseBadge } from '@/components/giveaway-card';
-import { buttonStyles, Card, Empty, PageTitle } from '@/components/ui';
-import { requireAdmin } from '@/lib/auth';
+import { RequireAdmin } from '@/components/guards';
+import { buttonStyles, Card, Empty, Loading, PageTitle } from '@/components/ui';
+import { must, useData } from '@/lib/data';
 import { formatDateTime, formatPrice } from '@/lib/format';
+import { supabase } from '@/lib/supabase';
 import type { Giveaway } from '@/lib/types';
 
-export const metadata: Metadata = { title: 'Admin' };
+export default function AdminPage() {
+  return (
+    <RequireAdmin>
+      <AdminHome />
+    </RequireAdmin>
+  );
+}
 
-export default async function AdminPage() {
-  const { supabase } = await requireAdmin();
-  const [{ data }, { count: unread }, { count: users }] = await Promise.all([
-    supabase.from('giveaways').select('*').order('opens_at', { ascending: false }).limit(100),
-    supabase.from('messages').select('id', { count: 'exact', head: true }).eq('from_admin', false).is('read_at', null),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }),
-  ]);
-  const giveaways = (data ?? []) as Giveaway[];
+function AdminHome() {
+  const { data } = useData(async () => {
+    const client = supabase();
+    const [giveaways, unread, users] = await Promise.all([
+      client.from('giveaways').select('*').order('opens_at', { ascending: false }).limit(100),
+      client.from('messages').select('id', { count: 'exact', head: true }).eq('from_admin', false).is('read_at', null),
+      client.from('profiles').select('id', { count: 'exact', head: true }),
+    ]);
+    return { giveaways: must(giveaways) as Giveaway[], unread: unread.count ?? 0, users: users.count ?? 0 };
+  }, []);
+  if (!data) return <Loading />;
 
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <PageTitle sub={`${users ?? 0} conturi`}>Admin</PageTitle>
+        <PageTitle sub={`${data.users} conturi`}>Admin</PageTitle>
         <div className="flex gap-2">
           <Link href="/admin/messages" className={buttonStyles.secondary}>
-            Mesaje{unread ? ` (${unread})` : ''}
+            Mesaje{data.unread ? ` (${data.unread})` : ''}
           </Link>
           <Link href="/admin/new" className={buttonStyles.primary}>
             Giveaway nou
@@ -32,12 +44,12 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {giveaways.length === 0 ? (
+      {data.giveaways.length === 0 ? (
         <Empty title="Niciun giveaway încă" body="Creează primul giveaway, publică-l și toți cei cu notificări active vor fi anunțați." />
       ) : (
         <div className="flex flex-col gap-2">
-          {giveaways.map((g) => (
-            <Link key={g.id} href={`/admin/giveaway/${g.id}`}>
+          {data.giveaways.map((g) => (
+            <Link key={g.id} href={`/admin/giveaway?id=${g.id}`}>
               <Card className="flex flex-col gap-1 transition hover:border-primary/50 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
