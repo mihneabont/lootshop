@@ -68,7 +68,18 @@ export function PushToggle({ compact = false }: { compact?: boolean }) {
       await supabase().from('profiles').update({ notifications_opt_in: true }).eq('id', userId);
       setState('on');
     } catch (e) {
-      setError((e as Error).message);
+      const message = (e as Error).message;
+      const brave = (navigator as Navigator & { brave?: unknown }).brave !== undefined;
+      // Brave and some privacy settings block the browser's push service.
+      if (/push (subscription|service)/i.test(message) || (e as Error).name === 'AbortError') {
+        setError(
+          brave
+            ? 'Brave blochează notificările. Activează „Use Google services for push messaging” în brave://settings/privacy, apoi repornește browserul.'
+            : 'Browserul nu a putut activa notificările. Verifică dacă notificările sunt permise pentru acest site și încearcă din nou, sau folosește Chrome.',
+        );
+      } else {
+        setError(message);
+      }
     } finally {
       setBusy(false);
     }
