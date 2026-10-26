@@ -31,15 +31,7 @@ jobs:
         env:
           # The repo sub-path, e.g. /lootshop (empty with a custom domain).
           NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
-          # Public values: set them under Settings → Secrets and variables → Actions → Variables.
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
-          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
-          NEXT_PUBLIC_COMPANY_NAME: ${{ vars.COMPANY_NAME }}
-          NEXT_PUBLIC_COMPANY_CUI: ${{ vars.COMPANY_CUI }}
-          NEXT_PUBLIC_COMPANY_REG: ${{ vars.COMPANY_REG }}
-          NEXT_PUBLIC_COMPANY_ADDRESS: ${{ vars.COMPANY_ADDRESS }}
-          NEXT_PUBLIC_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+          # Other public settings live in .env.production.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out
