@@ -19,7 +19,7 @@ export default function Home() {
 
 function HomeContent() {
   const { session } = useAuth();
-  const { data, loading } = useData(
+  const { data, loading, error } = useData(
     async () =>
       must(
         await supabase()
@@ -31,6 +31,7 @@ function HomeContent() {
       ) as Giveaway[],
     [],
   );
+  if (error) return <NotConfigured />;
   if (loading || !data) return <Loading />;
 
   const live = data.filter((g) => phaseOf(g) === 'open');
